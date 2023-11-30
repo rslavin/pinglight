@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+
+SCRIPT_PATH=$(dirname $(readlink -f ${0}))
+# be sure to fill in the .env file
+source ${SCRIPT_PATH}/.env
+
+if [[ -z "${PROC_NAME}" || -z "${COMMAND}" ]]; then
+    echo "Error: Both PROC_NAME and COMMAND must be set in the .env file"
+    exit 1
+fi
+
+PID_FILE=/tmp/${PROC_NAME}.pid
+
+source ${SCRIPT_PATH}/format.sh
+
+function getPid {
+  if [[ -e "${PID_FILE}" ]]; then
+    PID=$(cat ${PID_FILE})
+  fi
+
+  echo ${PID}
+}
+
+function startProc {
+  printf "Starting ${PROC_NAME} "
+
+  # run the process if no PID file exists and create one, error otherwise
+  if [[ ! -f ${PID_FILE} ]]; then
+    ${COMMAND} &
+    echo $! >${PID_FILE}
+    echo "[ $(format OK ${GREEN} ${BOLD}) ]"
+  else
+    echo "[$(format FAIL ${RED} ${BOLD} ${BLACK})]"
+    echo "${PROC_NAME} already running -- if this is an error, try 'restart'"
+  fi
+}
+
+function stopProc {
+  printf "Stopping ${PROC_NAME} "
+
+  # kill the process if it's running and delete the PID file, error otherwise
+  if [[ ! -z "$(getPid)" ]]; then
+    kill "$(getPid)" >/dev/null 2>&1
+
+    if [[ -f ${PID_FILE} ]]; then
+      rm -f ${PID_FILE}
+    fi
+
+    echo "[ $(format OK ${GREEN} ${BOLD}) ]"
+  else
+    echo "[$(format FAIL ${RED} ${BOLD} ${BLACK})]"
+    echo "No running ${PROC_NAME} process found"
+  fi
+}
+
+case ${1} in
+'start')
+  startProc
+  ;;
+'stop')
+  stopProc
+  ;;
+'restart')
+  stopProc
+  startProc
+  ;;
+'status')
+  if [[ ! -z "$(getPid)" ]]; then
+    echo "${PROC_NAME} is currently running -- PID: $(getPid)"
+  else
+    echo "${PROC_NAME} is not currently running"
+  fi
+  ;;
+*)
+  echo "Usage: $(basename ${0}) <{ start|stop|restart|status }>"
+  ;;
+esac
